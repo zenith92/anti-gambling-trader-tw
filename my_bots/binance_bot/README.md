@@ -57,6 +57,37 @@ binance_bot/
 
 > 本專案**自包含**：不需安裝反詐投資王本體即可獨立執行。
 
+## AI 訊號模式（Claude，選用，會產生 API 費用）
+
+參考 [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) 的原則：
+**AI 只給觀點，不碰下單**。Claude 看最近 60 根匿名化 K 線，回傳 −1 ~ +1 的分數與一句理由；
+進出場門檻、部位大小、停損停利全部由 `strategy.py` 的固定規則決定。
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=...      # 自己在終端機設定，不要寫進 config.yaml
+# config.yaml: strategy.type: ai、data.source: binance
+python main.py
+```
+
+防止「AI 回測偷看未來」的設計:
+
+- **只在模型沒看過的行情上做決策**:`claude-opus-5-5` 知識截止於 2026 年 6 月,
+  所以只有 2026-07-01 起的 K 線會呼叫 AI,之前的只當歷史背景。換模型時,
+  不知道截止日就必須自己填 `ai.decide_after`,程式不會猜。
+- **匿名化**(預設開):不給標的名稱與日期,價格換算成以 100 為起點的指數。
+  這能降低、但無法完全消除模型「認出行情」的可能。
+
+成本與重現性:
+
+- 執行前會先算出需要幾次 API 呼叫與粗估費用,超過 `ai.max_calls`(預設 200)就**在花錢前停止**。
+- 每次判斷快取在 `ai_cache/`,重跑不重複付費,結果也能重現(新模型不支援 temperature)。
+- 每次判斷的分數與理由存在 `ai_decisions.csv`,方便你檢查 AI 到底依據什麼。
+
+誠實提醒:截止日之後的日 K 線只有幾個月,交易筆數一定很少,`analyze` 會判定樣本不足。
+要累積有意義的樣本,只能改用較短週期(呼叫次數與費用會倍增)或**每天往前跑紙上模擬**
+慢慢累積 —— 沒有捷徑。AI 給出看似有道理的理由,不代表它有優勢。
+
 ## 接你自己的券商
 
 券商:Binance(加密貨幣)

@@ -18,3 +18,5 @@ venv/
 # 回測產出(可能含你的交易紀錄)
 paper_trades.csv
 data_cache/
+ai_cache/
+ai_decisions.csv

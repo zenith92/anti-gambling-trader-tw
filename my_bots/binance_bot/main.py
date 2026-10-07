@@ -203,6 +203,7 @@ def run():
                  for sym in symbols}
     open_trades = {}     # symbol -> 進場資訊
     closed_trades = []   # 已平倉交易(給 analyze 用)
+    strategy.prepare(histories)
     n_bars = min((len(h) for h in histories.values()), default=0)
     if chart_symbol:
         candles_for_chart = histories[chart_symbol][:n_bars]
@@ -279,6 +280,17 @@ def run():
     print(f"  成交筆數: {n_fills}")
     print(f"  已平倉交易: {len(closed_trades)} 筆(未平倉 {len(open_trades)} 筆不計入)")
     print("=" * 50)
+    ai = getattr(strategy, "ai", None)
+    if ai is not None:
+        print(f"  {ai.summary()}")
+        if ai.decisions:
+            with open("ai_decisions.csv", "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.DictWriter(f, fieldnames=["時間", "代號", "分數", "理由"])
+                w.writeheader()
+                for d in ai.decisions:
+                    w.writerow({"時間": _fmt_time(d["time"]), "代號": d["symbol"],
+                                "分數": f"{d['conviction']:+.2f}", "理由": d["thesis"]})
+            print("  AI 每次判斷的分數與理由: ai_decisions.csv")
     if closed_trades:
         path = export_trades(closed_trades)
         print(f"  交易紀錄已存成: {path}")
