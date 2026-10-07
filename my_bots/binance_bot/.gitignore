@@ -1,0 +1,20 @@
+# 金鑰與個人設定 —— 絕對不要提交
+config.yaml
+.env
+*.key
+credentials*
+
+# 產出
+chart.html
+chart.png
+chart_data.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 回測產出(可能含你的交易紀錄)
+paper_trades.csv
+data_cache/

@@ -1,0 +1,45 @@
+# binance_bot 設定檔範本
+# 複製成 config.yaml 後填入你的實際值。config.yaml 已被 .gitignore 排除。
+
+market: crypto
+symbols:
+  - "BTCUSDT"
+  - "ETHUSDT"
+
+broker: paper          # 先用紙上模擬;接好 brokers/binance_broker.py 後才改 binance。可選:paper | alpaca | binance | bybit | ccxt | fubon | ibkr | kgi | okx | pionex | shioaji | tradier | tw_futures | yuanta
+
+# 真實券商連線資訊（紙上模擬不需要）。Pionex 只填環境變數名稱；其他範本欄位
+# 對應 brokers/ 內的建構子簽名。
+# 請勿提交到 git。
+credentials:
+  api_key: ""
+  api_secret: ""
+  testnet: true
+
+# 歷史 K 線來源
+data:
+  source: demo     # demo = 內建示範資料(離線、績效無意義);binance = 真實公開行情(不需金鑰)
+  interval: 1d     # Binance K 線週期:1m 5m 15m 1h 4h 1d ...
+  bars: 1000       # 抓最近幾根已收盤 K 線(越多筆交易,統計檢驗越有意義)
+
+# 範例策略(均線交叉)參數 —— 換成你自己的規則時可一併改掉
+strategy:
+  fast_ma: 5
+  slow_ma: 20
+
+paper:
+  starting_cash: 10000      # USDT
+  fee_rate: 0.001
+  slippage: 0.0005
+
+risk:
+  max_position_pct: 0.2     # 單一標的最多動用 20% 資金
+  stop_loss_pct: 0.05       # 停損 5%（沒有停損是賭徒的標誌）
+  take_profit_pct: 0.15     # 停利 15%
+
+# 反詐投資王的裁決（產生時嵌入）
+anti_gambling:
+  verdict_level: "unknown"
+  stage_code: "unverified"
+  stage_reason: "尚未完成含樣本外與風險基準的交易階段分析"
+  allow_live_trading: false   # 只有完整 stage 為 tiny_live_validation 才可能 true
