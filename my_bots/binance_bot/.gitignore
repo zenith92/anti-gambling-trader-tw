@@ -20,3 +20,10 @@ paper_trades.csv
 data_cache/
 ai_cache/
 ai_decisions.csv
+
+# 每日前向模擬(你的個人帳戶狀態與紀錄)
+paper_state.json
+paper_state.json.lock
+forward_trades.csv
+forward_log.csv
+daily_paper.log

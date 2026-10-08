@@ -52,10 +52,57 @@ binance_bot/
   brokers/           # 真實券商範例框架（待填 API key 與實作）
   charting.py        # 圖表模組（Lightweight Charts (TradingView)）
   data_feed.py       # 資料來源（回測 / 即時）
+  daily_paper.py     # 每日前向紙上模擬（排程執行，累積樣本外紀錄）
+  ai_signal.py       # 選用的 Claude AI 訊號
   config.example.yaml # 設定範本（複製成 config.yaml 後填入）
 ```
 
 > 本專案**自包含**：不需安裝反詐投資王本體即可獨立執行。
+
+## 每日前向紙上模擬（真正的樣本外驗證）
+
+回測是「事後拿整段歷史套規則」，再怎麼小心都可能不自覺地挑過參數。
+`daily_paper.py` 只處理**建立帳戶之後才收盤**的 K 線，每天跑一次、慢慢累積交易紀錄——
+這是唯一無法偷看未來的驗證方式。全程紙上記帳，不會連線任何真實券商。
+
+```bash
+cp config.example.yaml config.yaml   # data.source 必須是 binance;策略選 ma_cross 或 ai
+python daily_paper.py                 # 第一次:只建立帳戶 paper_state.json,不交易
+python daily_paper.py                 # 之後每天:處理新收盤的 K 線,同一天重跑不會重複交易
+```
+
+產出（都已被 .gitignore 排除）：
+
+- `paper_state.json`：現金、持倉、處理到哪根 K 線
+- `forward_trades.csv`：已平倉交易，累積 30 筆以上再檢驗：
+  `python -m core.cli analyze my_bots/binance_bot/forward_trades.csv`
+- `forward_log.csv`：每根 K 線的價格、動作、理由（AI 模式含分數與理由）、帳戶權益
+
+規則：
+
+- **改了 config.yaml 的規則或參數就拒絕執行**——邊看結果邊改規則，紀錄就不再是樣本外。
+  要換規則，把上面三個檔案改名保存，再重新建立帳戶。（調整 `ai.max_calls` 或 `data.bars` 不算換規則。）
+- 漏跑幾天沒關係，下次執行會依時間順序補上。
+- 只有整批 K 線處理成功才會更新狀態；中途出錯（例如 API 失敗）重跑即可，不會重複交易。
+
+### 排程（Binance 日 K 線在台灣時間 08:00 收盤，建議 08:10 跑）
+
+macOS / Linux（`crontab -e`，時間以電腦時區為準）：
+
+```
+10 8 * * * cd /你的路徑/my_bots/binance_bot && /usr/bin/env python3 daily_paper.py >> daily_paper.log 2>&1
+```
+
+AI 模式還需要金鑰：在 crontab 最上方加一行 `ANTHROPIC_API_KEY=...`，或改用只有你能讀的環境設定檔，
+不要寫進 repo 裡的任何檔案。
+
+Windows（命令提示字元）：
+
+```
+schtasks /Create /SC DAILY /ST 08:10 /TN binance_daily_paper /TR "cmd /c cd /d C:\你的路徑\my_bots\binance_bot && python daily_paper.py >> daily_paper.log 2>&1"
+```
+
+電腦要在排程時間開機才會執行；沒開機的那幾天，下次執行時會自動補上。
 
 ## AI 訊號模式（Claude，選用，會產生 API 費用）
 
