@@ -1,0 +1,8 @@
+# -*- coding: utf-8 -*-
+# 本專案依賴
+pyyaml>=6.0
+# 圖表 Lightweight Charts (TradingView) 由前端 CDN 載入,無需 pip 安裝
+# 你的券商 SDK（接真實券商時才需要）:
+# python-binance
+# AI 訊號(strategy.type: ai)才需要:
+# anthropic>=1.0

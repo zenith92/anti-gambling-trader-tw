@@ -1,0 +1,186 @@
+# binance_bot
+
+由 **反詐投資王(Anti-Gambling Trader)** 腳架產生的個人交易程式。
+
+- 市場:`crypto`
+- 標的:BTCUSDT, ETHUSDT
+- 券商:Binance(加密貨幣)
+- 圖表:Lightweight Charts (TradingView)（Apache-2.0）
+
+## ⛔ 來自反詐投資王的重要提醒
+
+你的交易紀錄分析結果為:**(尚未完成含樣本外與風險基準的交易階段分析)**
+
+因此本專案的 `main.py` 已**預設禁用真實下單**(`ALLOW_LIVE_TRADING = False`)。
+請先修正方法,用後續未看過的新交易重新驗證,再以 `--from-analysis` 重新產生專案。
+不要手動猜測或改寫 `stage_code` / `allow_live_trading` —— 這是保護你的錢,不是限制你。
+
+## 快速開始（紙上模擬，不碰真錢）
+
+```bash
+pip install -r requirements.txt
+cp config.example.yaml config.yaml
+python main.py            # 用 PaperBroker 跑一遍,並產生圖表與交易紀錄
+```
+
+跑完會輸出績效摘要、`chart.html` 圖表,以及 `paper_trades.csv`(已平倉交易)。
+
+### 三步驟:規則 → 真實資料回測 → 統計檢驗
+
+1. **規則**:`strategy.py` 目前放的是「均線交叉」**範例**(MA5 上穿 MA20 買、
+   下穿或停損 5% / 停利 15% 賣,只做多)。這不是驗證過的賺錢方法,請換成你自己的規則。
+2. **真實資料**:在 `config.yaml` 把 `data.source` 改成 `binance`,程式會從 Binance
+   公開行情 API 抓最近 `data.bars` 根**已收盤** K 線(不需要 API key,不會下單),
+   並把原始資料存到 `data_cache/` 方便你檢查。預設 `demo` 是假資料,績效沒有意義。
+3. **檢驗**:回到 repo 根目錄,把交易紀錄交給反詐投資王:
+
+   ```bash
+   python -m core.cli analyze my_bots/binance_bot/paper_trades.csv
+   ```
+
+   回測紀錄是「事後套規則」的結果,就算通過也只代表值得繼續紙上觀察,
+   不代表能上真錢 —— 參數一調再調直到回測好看,正是過度擬合的典型陷阱。
+
+## 專案結構
+
+```
+binance_bot/
+  main.py            # 主程式（預設紙上模擬）
+  strategy.py        # 你的交易規則（進出場條件待你填寫）
+  broker_lib.py      # 自包含的券商函式庫（交易介面 + PaperBroker，零外部相依）
+  broker_setup.py    # 選擇 / 建立券商連接器
+  brokers/           # 真實券商範例框架（待填 API key 與實作）
+  charting.py        # 圖表模組（Lightweight Charts (TradingView)）
+  data_feed.py       # 資料來源（回測 / 即時）
+  daily_paper.py     # 每日前向紙上模擬（排程執行，累積樣本外紀錄）
+  ai_signal.py       # 選用的 Claude AI 訊號
+  config.example.yaml # 設定範本（複製成 config.yaml 後填入）
+```
+
+> 本專案**自包含**：不需安裝反詐投資王本體即可獨立執行。
+
+## 每日前向紙上模擬（真正的樣本外驗證）
+
+回測是「事後拿整段歷史套規則」，再怎麼小心都可能不自覺地挑過參數。
+`daily_paper.py` 只處理**建立帳戶之後才收盤**的 K 線，每天跑一次、慢慢累積交易紀錄——
+這是唯一無法偷看未來的驗證方式。全程紙上記帳，不會連線任何真實券商。
+
+```bash
+cp config.example.yaml config.yaml   # data.source 必須是 binance;策略選 ma_cross 或 ai
+python daily_paper.py                 # 第一次:只建立帳戶 paper_state.json,不交易
+python daily_paper.py                 # 之後每天:處理新收盤的 K 線,同一天重跑不會重複交易
+```
+
+產出（都已被 .gitignore 排除）：
+
+- `paper_state.json`：現金、持倉、處理到哪根 K 線
+- `forward_trades.csv`：已平倉交易，累積 30 筆以上再檢驗：
+  `python -m core.cli analyze my_bots/binance_bot/forward_trades.csv`
+- `forward_log.csv`：每根 K 線的價格、動作、理由（AI 模式含分數與理由）、帳戶權益
+
+規則：
+
+- **改了 config.yaml 的規則或參數就拒絕執行**——邊看結果邊改規則，紀錄就不再是樣本外。
+  要換規則，把上面三個檔案改名保存，再重新建立帳戶。（調整 `ai.max_calls` 或 `data.bars` 不算換規則。）
+- 漏跑幾天沒關係，下次執行會依時間順序補上。
+- 只有整批 K 線處理成功才會更新狀態；中途出錯（例如 API 失敗）重跑即可，不會重複交易。
+
+### 排程（Binance 日 K 線在台灣時間 08:00 收盤，建議 08:10 跑）
+
+macOS / Linux（`crontab -e`，時間以電腦時區為準）：
+
+```
+10 8 * * * cd /你的路徑/my_bots/binance_bot && /usr/bin/env python3 daily_paper.py >> daily_paper.log 2>&1
+```
+
+AI 模式還需要金鑰：在 crontab 最上方加一行 `ANTHROPIC_API_KEY=...`，或改用只有你能讀的環境設定檔，
+不要寫進 repo 裡的任何檔案。
+
+Windows（命令提示字元）：
+
+```
+schtasks /Create /SC DAILY /ST 08:10 /TN binance_daily_paper /TR "cmd /c cd /d C:\你的路徑\my_bots\binance_bot && python daily_paper.py >> daily_paper.log 2>&1"
+```
+
+電腦要在排程時間開機才會執行；沒開機的那幾天，下次執行時會自動補上。
+
+## AI 訊號模式（Claude，選用，會產生 API 費用）
+
+參考 [virattt/ai-hedge-fund](https://github.com/virattt/ai-hedge-fund) 的原則：
+**AI 只給觀點，不碰下單**。Claude 看最近 60 根匿名化 K 線，回傳 −1 ~ +1 的分數與一句理由；
+進出場門檻、部位大小、停損停利全部由 `strategy.py` 的固定規則決定。
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=...      # 自己在終端機設定，不要寫進 config.yaml
+# config.yaml: strategy.type: ai、data.source: binance
+python main.py
+```
+
+防止「AI 回測偷看未來」的設計:
+
+- **只在模型沒看過的行情上做決策**:`claude-opus-5-5` 知識截止於 2026 年 6 月,
+  所以只有 2026-07-01 起的 K 線會呼叫 AI,之前的只當歷史背景。換模型時,
+  不知道截止日就必須自己填 `ai.decide_after`,程式不會猜。
+- **匿名化**(預設開):不給標的名稱與日期,價格換算成以 100 為起點的指數。
+  這能降低、但無法完全消除模型「認出行情」的可能。
+
+成本與重現性:
+
+- 執行前會先算出需要幾次 API 呼叫與粗估費用,超過 `ai.max_calls`(預設 200)就**在花錢前停止**。
+- 每次判斷快取在 `ai_cache/`,重跑不重複付費,結果也能重現(新模型不支援 temperature)。
+- 每次判斷的分數與理由存在 `ai_decisions.csv`,方便你檢查 AI 到底依據什麼。
+
+誠實提醒:截止日之後的日 K 線只有幾個月,交易筆數一定很少,`analyze` 會判定樣本不足。
+要累積有意義的樣本,只能改用較短週期(呼叫次數與費用會倍增)或**每天往前跑紙上模擬**
+慢慢累積 —— 沒有捷徑。AI 給出看似有道理的理由,不代表它有優勢。
+
+## 接你自己的券商
+
+券商:Binance(加密貨幣)
+安裝:`pip install python-binance`
+
+> ⚠️ 在 Binance 後台建立 API key 時,先只開『讀取』權限做測試;確認程式無誤後再考慮開啟交易權限。永遠不要開提領權限。
+
+1. 打開 `brokers/` 下的範例框架,依說明用環境變數或設定提供連線資料,並完成 `TODO`。
+2. 在 `broker_setup.py` 把 `build_broker()` 改成回傳你的券商實例。
+3. **務必先用券商的測試網 / 模擬模式確認無誤。**
+
+## 從紙上模擬切到真實下單（高風險）
+
+真實下單受**安全閘門**保護。要解除,必須:
+
+1. 用 `scaffold --from-analysis <完整交易紀錄>` 產生專案;只有階段為
+   `tiny_live_validation` 時,設定範本才可能同時寫入正確 stage 與允許旗標。
+2. 複製 `config.example.yaml` 為 `config.yaml`,閱讀免責聲明後才把
+   `risk.i_have_read_disclaimer` 設為布林值 `true`。不要手動改 stage 或允許旗標。
+3. 在 `main.py` 把 `ALLOW_LIVE_TRADING` 改為 `True`。
+4. Runtime 會重新驗證上述所有設定,最後才呼叫券商的
+   `confirm_live_trading(i_understand_the_risk=True)`。
+5. `main.py` 內建的是歷史／示範 K 線 replay，因此偵測到 live broker 時仍會硬性退出；
+   不會把 120 根歷史訊號一次送成真單。真實驗證必須另寫只處理「最新一根已完成 K 線」
+   的 runner，並接上可證明為即時且無前視的資料來源。
+
+缺欄位、錯誤型別、其他 stage 或 YAML 損壞都會維持封鎖。即使通過全部閘門,
+也只代表程式允許你自行做極小額驗證,不代表適合重押或全職交易。
+
+這些摩擦是刻意設計的 —— 讓你在動用真錢前,被迫停下來想清楚。
+
+## 換圖表樣式
+
+想換成別的圖表庫,重新用反詐投資王產生:
+
+```bash
+python -m core.cli scaffold --name binance_bot --broker binance \
+    --chart <lightweight|plotly|mplfinance|echarts> --market crypto
+```
+
+## ⚠️ 免責聲明
+
+本專案為教育與研究用途,不構成投資建議。投資有風險,盈虧自負。
+過去績效不代表未來表現。你對自己用本程式做出的一切交易負全部責任。
+
+---
+
+由 **反詐投資王(Anti-Gambling Trader)** 腳架產生。
+原作者:好棒棒反詐協會 - 免費顧問 阿軒割割
